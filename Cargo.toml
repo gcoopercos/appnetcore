@@ -1,0 +1,12 @@
+[package]
+name = "appnetcore"
+version = "0.1.0"
+authors = ["GC"]
+build = "build.rs"
+[build-dependencies]
+capnpc = "0.8"
+
+[dependencies]
+capnp = "0.8.10"
+
+
