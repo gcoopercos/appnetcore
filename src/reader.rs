@@ -1,9 +1,12 @@
-extern crate capnp;
 
 use std::net::UdpSocket;
 use std::io::{BufReader};
 
-use self::capnp::serialize_packed;
+use ::capnp::serialize_packed;
+use ::capnp::message::Builder;
+
+
+use ::connections_capnp::connection_request;
 
 
 //
@@ -36,6 +39,9 @@ fn write_packet() {
     socket.connect("127.0.0.1:34256").expect("connect function failed");
     socket.send(&[0, 1, 2]).expect("couldn't send message");
     println!("Data Written");
+
+    let mut message = Builder::new_default();
+    let cr = message.init_root::<connection_request::Builder>();
 }
 /*
 int PacketWriter::writeCommandPacket(
@@ -78,7 +84,7 @@ return n;
 */
 
 
-fn read_command_packet(buf : & [u8;1024]) -> capnp::Result<()>  {
+fn read_command_packet(buf : & [u8;1024]) -> ::capnp::Result<()>  {
     //let stdin = ::std::io::stdin();
 
 //    let mut br = BufReader::new(buf.as_ref());
@@ -88,7 +94,7 @@ fn read_command_packet(buf : & [u8;1024]) -> capnp::Result<()>  {
     let mut br = BufReader::new( slice ); //buf.as_ref());
 
     let message_reader = try!(serialize_packed::read_message(&mut br, //&mut stdin.lock(),
-                                                             self::capnp::message::ReaderOptions::new()));
+                                                             ::capnp::message::ReaderOptions::new()));
     //let address_book = try!(message_reader.get_root::<address_book::Reader>());
     Ok(())
 }
