@@ -6,7 +6,8 @@ use ::capnp::serialize_packed;
 use ::capnp::message::Builder;
 
 
-use ::connections_capnp::connection_request;
+//use ::connections_capnp::connection_request;
+use ::connections_capnp::app_packet;
 
 
 //
@@ -14,77 +15,98 @@ use ::connections_capnp::connection_request;
 //
 fn read_packets() {
     let socket = UdpSocket::bind("127.0.0.1:34256").expect("couldn't bind to address");
-    let mut buf = [0; 1024];
+    let mut buf:[u8;2048] = [0; 2048];
     loop {
         println!("socket waiting");
-        let (number_of_bytes, src_addr) = socket.recv_from(&mut buf)
+        let (number_of_bytes, _src_addr) = socket.recv_from(&mut buf)
                                             .expect("Didn't receive data");
         println!("read done");
         if number_of_bytes < 4 {
             println!("recv_from expected >=4 but amount was {}", number_of_bytes);
             break;
         } else {
-            println!("amount was{}", number_of_bytes);
+            eprint!("READ BUF: ");
+            for i in buf.iter() {
+                eprint!("{:?}", i)
+            }
+            let res = read_command_packet(&buf);
+            match res {
+                Ok(_val) =>  println!("amount was {}", number_of_bytes),
+                Err(E) => println!("Problem {:?}  bytes: {}", E, number_of_bytes),
+            }
             break;
-            //read_command_packet(buf);
             //readCommandPacket(
         }
     }
 }
 
 
+fn write_packet_to_buffer(buf : &  mut [u8;2048]) {
+    let mut message = Builder::new_default();
+    {
+        //        let mut cr = message.init_root::<connection_request::Builder>();
+        let mut app_packet = message.init_root::<app_packet::Builder>();
+        let mut packetType = app_packet.get_packet_type(); //init_packet_type();
+        let mut cr = packetType.init_connection_request();
+        cr.set_client_read_host("testhost22");
+        cr.set_client_read_port("1234");
+        cr.set_client_name("cname");
+        cr.set_client_pass("cpass");
+    }
+//    let mut buf :[u8; 2048] = [0;2048];
+    let mut bufslice = & mut buf[..];
+
+    serialize_packed::write_message( & mut bufslice, & mut message);
+}
+
+fn send_packet_to_socket(buf : &  mut [u8;2048]) {
+    println!("Writing data");
+    let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
+    socket.connect("127.0.0.1:34256").expect("connect function failed");
+    let mut bufslice = & mut buf[..];
+    eprint!("BUF to WRITE: ");
+    for i in bufslice.iter() {
+        eprint!("{:?}", i)
+    }
+    socket.send(&mut bufslice).expect("couldn't send packet");
+    println!("Data Written");
+}
+
 fn write_packet() {
     println!("Writing data");
     let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
     socket.connect("127.0.0.1:34256").expect("connect function failed");
-    socket.send(&[0, 1, 2]).expect("couldn't send message");
+//    socket.send(&[0, 1, 2]).expect("couldn't send message");
     println!("Data Written");
 
     let mut message = Builder::new_default();
-    let cr = message.init_root::<connection_request::Builder>();
-}
-/*
-int PacketWriter::writeCommandPacket(
-shared_ptr<Command> command,
-string& host,
-int port) {
+    {
+//        let mut cr = message.init_root::<connection_request::Builder>();
+        let mut app_packet = message.init_root::<app_packet::Builder>();
+        let mut packetType = app_packet.get_packet_type(); //init_packet_type();
+        let mut cr = packetType.init_connection_request();
+        cr.set_client_read_host("testhost22");
+        cr.set_client_read_port("1234");
+        cr.set_client_name("cname");
+        cr.set_client_pass("cpass");
+    }
+    let mut buf :[u8; 2048] = [0;2048];
+    let mut bufslice = & mut buf[..];
 
-flatbuffers::FlatBufferBuilder& fbb = command->getBufferBuilder();
-int size = fbb.GetSize() + 4; // Need room for the type
-if (size > 1000) {
-cerr << " Warning: packet size too large" << endl;
-}
+    serialize_packed::write_message( & mut bufslice, & mut message);
+//    serialize_packed::write_message( & mut buf, & mut message);
+    eprint!("BUF to SEND (write_packet): ");
+    for i in bufslice.iter() {
+        eprint!("{:?}", i)
+    }
 
-uint8_t* pkt_notype = fbb.GetBufferPointer();
-uint8_t pkt[1024];
-uint32_t commandType = htonl(command->getCommandTypeId());
+    socket.send(&mut bufslice).expect("couldn't send packet");
+//    socket.send(&buf).expect("couldn't send packet");
 
-memcpy(pkt, &commandType, 4);
-memcpy(pkt+4, pkt_notype, fbb.GetSize());
-
-
-int sock_fd;
-sock_fd = socket(AF_INET, SOCK_DGRAM,0);
-struct sockaddr_in server; //, from;
-server.sin_family = AF_INET;
-//server.sin_7port = htons(port);
-server.sin_port = htons(port);
-memset(&(server.sin_zero), 0, 8);
-server.sin_addr.s_addr = inet_addr(host.c_str());
-
-
-if (sock_fd < 0) {
-cerr << "socket(..) failed" << endl;
 }
 
-int n=sendto(sock_fd, pkt,size, 0, (const struct sockaddr *)&server, sizeof(server));
 
-return n;
-}
-*/
-
-
-fn read_command_packet(buf : & [u8;1024]) -> ::capnp::Result<()>  {
+fn read_command_packet(buf : & [u8;2048]) -> ::capnp::Result<()>  {
     //let stdin = ::std::io::stdin();
 
 //    let mut br = BufReader::new(buf.as_ref());
@@ -93,8 +115,25 @@ fn read_command_packet(buf : & [u8;1024]) -> ::capnp::Result<()>  {
     let mut slice: &[u8] = buf;
     let mut br = BufReader::new( slice ); //buf.as_ref());
 
-    let message_reader = try!(serialize_packed::read_message(&mut br, //&mut stdin.lock(),
-                                                             ::capnp::message::ReaderOptions::new()));
+    println!("Deserializing message...");
+    let message_reader = try!(serialize_packed::read_message(&mut br,
+                                                         ::capnp::message::ReaderOptions::new()));
+//          let address_book = try!(message_reader.get_root::<address_book::Reader>());
+
+    println!("Getting app packet...");
+    let app_packet = try!(message_reader.get_root::<app_packet::Reader>());
+
+    println!("Determining app packet type...");
+    match app_packet.get_packet_type().which() {
+        Ok(app_packet::packet_type::ConnectionRequest(_cr)) => {
+            println!("");println!("  ConnectRequest!! ");
+        }
+        Ok(app_packet::packet_type::HelloMessage(_msg)) => {
+            println!("  msg: {}", "Hellow Message!!!");
+        }
+        Err(::capnp::NotInSchema(_)) => { println!(" Not in schema error")}
+    }
+//    let conmessage_reader.get_root::<connection_request::Reader>();
     //let address_book = try!(message_reader.get_root::<address_book::Reader>());
     Ok(())
 }
@@ -112,34 +151,37 @@ mod tests {
         let ten_millis  = time::Duration::from_millis(200);
 
         thread::sleep(ten_millis);
-        write_packet();
+        let mut writebuf : [u8;2048] = [0;2048];
+        // Works.
+        write_packet_to_buffer(& mut writebuf);
+        send_packet_to_socket(& mut writebuf);
+
+        // Doesn't work. Why?
+//        write_packet();
 
         rthread.join();
         println!("hubba hubba");
     }
+
+//    #[test]
+//    fn serdes_data() {
+//        eprintln!("Ser data...");
+//        let mut writebuf : [u8;2048] = [0;2048];
+//        write_packet_to_buffer(& mut writebuf);
+//
+//        eprintln!("Des data...");
+//        let mut readbuf : [u8;2048] = [0;2048];
+//        let res = read_command_packet(&writebuf);
+//        match res {
+//            Ok(_val) =>  println!("Read ok!"),
+//            Err(E) => println!("Problem {:?} ", E),
+//        }
+//
+//        eprintln!("Data Read.");
+//        //for (i, elem) in readbuf.iter_mut().enumerate() {
+//        for i in writebuf.iter() {
+//            eprint!("{:?}", i)
+//        }
+//    }
 }
 
-
-/*void PacketReader::readCommandPacket(uint32_t command_type,
-uint8_t *buf, int bufsize,
-shared_ptr<map<uint32_t, function<shared_ptr<Command>()>>> cmdCreators) {
-
-shared_ptr<Command> cmd;
-if (cmdCreators->find(command_type) == cmdCreators->end()) {
-cerr << "Packet handler not found for cmd type: " << command_type<< endl;
-} else {
-cmd = (*cmdCreators)[command_type]();
-
-if (cmd) {
-cmd->writeReceivedData(buf, bufsize);
-} else {
-cerr << "Command not create but cmd creation lambda does exist.  cmd type: " <<
-command_type << endl;
-}
-
-cerr << "Command packet read. Returning cmd." << endl;
-
-// Put the command in the queue
-destination_queue->enqueue(cmd);
-}
-*/
