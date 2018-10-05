@@ -60,7 +60,7 @@ fn write_packet_to_buffer(buf : &  mut [u8;2048]) {
 }
 
 fn send_packet_to_socket(buf : &  mut [u8;2048]) {
-    println!("Writing data");
+    eprintln!("Writing data");
     let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
     socket.connect("127.0.0.1:34256").expect("connect function failed");
     let mut bufslice = & mut buf[..];
@@ -69,15 +69,15 @@ fn send_packet_to_socket(buf : &  mut [u8;2048]) {
         eprint!("{:?}", i)
     }
     socket.send(&mut bufslice).expect("couldn't send packet");
-    println!("Data Written");
+    eprintln!("Data Written");
 }
 
 fn write_packet() {
-    println!("Writing data");
+    eprintln!("Writing data");
     let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
     socket.connect("127.0.0.1:34256").expect("connect function failed");
 //    socket.send(&[0, 1, 2]).expect("couldn't send message");
-    println!("Data Written");
+    eprintln!("Data Written");
 
     let mut message = Builder::new_default();
     {
@@ -127,6 +127,11 @@ fn read_command_packet(buf : & [u8;2048]) -> ::capnp::Result<()>  {
     match app_packet.get_packet_type().which() {
         Ok(app_packet::packet_type::ConnectionRequest(_cr)) => {
             println!("");println!("  ConnectRequest!! ");
+            let request = _cr?;
+            println!("CR: {}", request.get_client_name()?);
+            println!("CR: {}", request.get_client_pass()?);
+            println!("CR: {}", request.get_client_read_host()?);
+            println!("CR: {}", request.get_client_read_port()?);
         }
         Ok(app_packet::packet_type::HelloMessage(_msg)) => {
             println!("  msg: {}", "Hellow Message!!!");
@@ -161,6 +166,7 @@ mod tests {
 
         rthread.join();
         println!("hubba hubba");
+        eprintln!("Ehubba hubba");
     }
 
 //    #[test]
