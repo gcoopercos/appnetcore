@@ -1,0 +1,12 @@
+* Thread Responsibilities
+
+
+* Server
+** Main
+** Reader
+    Grabs packet commands off the wire, deserializes them and turns them into app commands to be passed to
+    channel processed elsewhere.
+
+** Writer
+
+

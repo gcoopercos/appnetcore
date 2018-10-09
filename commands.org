@@ -1,0 +1,7 @@
+Types of commands
+
+* Communication commands
+   - Connection Request
+   - Connection Response
+   - Connection Sync
+   - StateChange ?
