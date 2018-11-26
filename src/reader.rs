@@ -1,21 +1,15 @@
-
-//use std::net::UdpSocket;
 use std::io::{BufReader};
-//use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc::{Sender};
-
 use network::PacketReader;
-
 use ::capnp::serialize_packed;
 //use ::capnp::message::Builder;
-
-
 //use ::connections_capnp::connection_request;
 use ::connections_capnp::app_packet;
-
+use connstate::ClientRegistryKeeper;
+use connstate::ClientHandle;
 
 pub trait CommCommand {
-    fn execute(&self);
+    fn execute(&self, comm_context: & mut ClientRegistryKeeper);
 }
 
 pub struct PacketReaderServer {
@@ -34,9 +28,12 @@ struct AddClientCommand {
 }
 
 impl CommCommand for AddClientCommand {
-    fn execute(&self) {
+    fn execute(&self, clients: & mut ClientRegistryKeeper) {
         eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_host);
         eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_port);
+        let client_handle : ClientHandle =  ClientHandle {client_read_host: self.read_host.to_string(),
+            _client_read_port: self.read_port.parse::<u32>().unwrap()};
+        clients.add_client(client_handle);
 //        unimplemented!()
     }
 }
@@ -100,6 +97,7 @@ mod tests {
     use network::{write_packet_to_buffer, send_packet_to_socket, read_packets};
     use std::sync::mpsc;
     use std::sync::mpsc::{Sender, Receiver};
+    use std::collections::HashMap;
 //    use std::fmt::Debug;
 
     #[derive(Debug)]
@@ -154,7 +152,9 @@ mod tests {
 //        write_packet();
 
         let received = command_rx.recv().unwrap();
-        received.execute();
+
+        let mut client_map = HashMap::new();
+        received.execute(& mut client_map);
         //command_rx : Receiver<Box<Command + Send>>
 
 

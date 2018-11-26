@@ -16,8 +16,8 @@ use std::collections::HashMap;
 
 
 pub struct ClientHandle {
-    client_read_host: String,
-    _client_read_port: u32,
+    pub client_read_host: String,
+    pub _client_read_port: u32,
 }
 
 
