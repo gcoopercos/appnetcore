@@ -15,25 +15,25 @@ use std::collections::HashMap;
 
 
 
-pub struct ClientHandle {
-    pub client_read_host: String,
-    pub _client_read_port: u32,
+pub struct SocketReadAddress {
+    pub read_host: String,
+    pub _read_port: u32,
 }
 
 
 
 pub trait ClientRegistryKeeper {
-    fn add_client(& mut self, handle: ClientHandle);
-    fn remove_client(& mut self, handle: ClientHandle);
+    fn add_client(& mut self, handle: SocketReadAddress);
+    fn remove_client(& mut self, handle: SocketReadAddress);
 }
 
-impl ClientRegistryKeeper for HashMap<String,ClientHandle> {
-    fn add_client(& mut self, handle: ClientHandle) {
-        self.insert(String::from(handle.client_read_host.as_str()), handle);
+impl ClientRegistryKeeper for HashMap<String, SocketReadAddress> {
+    fn add_client(& mut self, handle: SocketReadAddress) {
+        self.insert(String::from(handle.read_host.as_str()), handle);
     }
 
-    fn remove_client(& mut self, handle: ClientHandle) {
-        self.remove(&handle.client_read_host);
+    fn remove_client(& mut self, handle: SocketReadAddress) {
+        self.remove(&handle.read_host);
     }
 }
 
@@ -46,7 +46,7 @@ mod tests {
     fn client_registry() {
 
         let mut client_registry = HashMap::new();
-        let chandle = ClientHandle{  client_read_host: String::from("testhost"), _client_read_port: 55};
+        let chandle = SocketReadAddress {  read_host: String::from("testhost"), _read_port: 55};
         client_registry.add_client(chandle);
     }
 

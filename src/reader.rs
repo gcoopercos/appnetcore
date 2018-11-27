@@ -6,7 +6,7 @@ use ::capnp::serialize_packed;
 //use ::connections_capnp::connection_request;
 use ::connections_capnp::app_packet;
 use connstate::ClientRegistryKeeper;
-use connstate::ClientHandle;
+use connstate::SocketReadAddress;
 
 pub trait CommCommand {
     fn execute(&self, comm_context: & mut ClientRegistryKeeper);
@@ -31,8 +31,9 @@ impl CommCommand for AddClientCommand {
     fn execute(&self, clients: & mut ClientRegistryKeeper) {
         eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_host);
         eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_port);
-        let client_handle : ClientHandle =  ClientHandle {client_read_host: self.read_host.to_string(),
-            _client_read_port: self.read_port.parse::<u32>().unwrap()};
+        let client_handle : SocketReadAddress =  SocketReadAddress {
+            read_host: self.read_host.to_string(),
+            _read_port: self.read_port.parse::<u32>().unwrap()};
         clients.add_client(client_handle);
 //        unimplemented!()
     }
@@ -134,12 +135,12 @@ mod tests {
 
         let pri = PacketReaderServer {command_tx: tx};
 
-        let rthread = read_packets(pri);
+        let listen_address =SocketReadAddress{
+            read_host: String::from("127.0.0.1"),
+            _read_port: 34256
+        };
 
-//
-//        let rthread = thread::spawn(|| {
-//            read_packets();
-//        });
+        let rthread = read_packets(pri, &listen_address);
         let ten_millis  = time::Duration::from_millis(200);
 
         thread::sleep(ten_millis);
