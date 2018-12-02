@@ -1,26 +1,23 @@
 use std::io::{BufReader};
-use std::sync::mpsc::{Sender};
+use std::collections::HashMap;
+
+use std::sync::mpsc::{Sender, Receiver, TryRecvError};
 use network::PacketReader;
 use ::capnp::serialize_packed;
-//use ::capnp::message::Builder;
-//use ::connections_capnp::connection_request;
 use ::connections_capnp::app_packet;
 use connstate::ClientRegistryKeeper;
 use connstate::SocketReadAddress;
 
+/// Communication related commands. Connection, disconnection, etc...
 pub trait CommCommand {
     fn execute(&self, comm_context: & mut ClientRegistryKeeper);
 }
 
-pub struct PacketReaderServer {
-    command_tx : Sender<Box<CommCommand + Send>>,
-//let (tx,rx): (Sender<Box<Command + Send>>, Receiver<Box<Command + Send>>) = mpsc::channel();
-
+/// Application related commands. App
+pub trait AppCommand {
+    fn execute(&self  /*, TODO app_conext here */);
 }
 
-//pub struct CommCommandProcessor {
-//    command_rx : Receiver<Box<CommCommand + Send>>,
-//}
 
 struct AddClientCommand {
     read_host : String,
@@ -35,15 +32,36 @@ impl CommCommand for AddClientCommand {
             read_host: self.read_host.to_string(),
             _read_port: self.read_port.parse::<u32>().unwrap()};
         clients.add_client(client_handle);
-//        unimplemented!()
     }
 }
 
-impl PacketReaderServer {
-    pub fn with_sender(sender: Sender<Box<CommCommand + Send>>) -> PacketReaderServer {
-        PacketReaderServer {command_tx: sender}
+struct TextMessageCommand {
+    receiver_id: u32,
+    message : String
+}
+
+impl AppCommand for TextMessageCommand {
+    fn execute(&self) {
+        eprint!("{}", self.message);
+        //eprintln!("Message: {}", self.message);
+//        eprintln!("Receiver_id: {}", self.receiver_id);
     }
 }
+
+pub struct PacketReaderServer {
+    command_tx : Sender<Box<CommCommand + Send>>,
+    app_tx : Sender<Box<AppCommand + Send>>
+}
+
+impl PacketReaderServer {
+    pub fn with_senders(
+        comm_sender: Sender<Box<CommCommand + Send>>,
+        app_sender: Sender<Box<AppCommand + Send>>) -> PacketReaderServer
+    {
+        PacketReaderServer {app_tx: app_sender, command_tx: comm_sender}
+    }
+}
+
 impl PacketReader for PacketReaderServer {
 
     // read_command_packet = This lives in the 'reader' thread and does the necessary
@@ -57,31 +75,43 @@ impl PacketReader for PacketReaderServer {
         let slice: &[u8] = buf;
         let mut br = BufReader::new(slice); //buf.as_ref());
 
-        println!("Deserializing message...");
+        //eprintln!("Deserializing message...");
         let message_reader = try!(serialize_packed::read_message(&mut br,
                                                                  ::capnp::message::ReaderOptions::new()));
         //          let address_book = try!(message_reader.get_root::<address_book::Reader>());
 
-        println!("Getting app packet...");
+        //eprintln!("Getting app packet...");
         let app_packet = try!(message_reader.get_root::<app_packet::Reader>());
 
-        println!("Determining app packet type...");
+        // eprintln!("Determining app packet type...");
         match app_packet.get_packet_type().which() {
             Ok(app_packet::packet_type::ConnectionRequest(_cr)) => {
-                println!("");
                 println!("  ConnectRequest!! ");
                 let request = _cr?;
                 println!("CR: {}", request.get_client_name()?);
                 println!("CR: {}", request.get_client_pass()?);
                 println!("CR: {}", request.get_client_read_host()?);
                 println!("CR: {}", request.get_client_read_port()?);
-                let cmd = Box::new(AddClientCommand{read_host: String::from(request.get_client_read_host()?),
-                    read_port: String::from(request.get_client_read_port()?)});
+                let cmd =
+                    Box::new(AddClientCommand {
+                        read_host: String::from(request.get_client_read_host()?),
+                        read_port: String::from(request.get_client_read_port()?)
+                    });
 
                 self.command_tx.send(cmd).unwrap();
             }
-            Ok(app_packet::packet_type::HelloMessage(_msg)) => {
-                println!("  msg: {}", "Hellow Message!!!");
+            Ok(app_packet::packet_type::ConnectionResponse(_msg)) => {
+                println!("  msg: {}", "Connection Response Received");
+            }
+            Ok(app_packet::packet_type::TextMessage(msg)) => {
+                let text_message = msg?;
+                let cmd =
+                    Box::new(TextMessageCommand {
+                        receiver_id: text_message.get_receiver_id(),
+                        message: String::from(text_message.get_message()?)
+                    });
+
+                self.app_tx.send(cmd).unwrap();
             }
             Err(::capnp::NotInSchema(_)) => { println!(" Not in schema error") }
         }
@@ -91,11 +121,32 @@ impl PacketReader for PacketReaderServer {
     }
 }
 
+//
+// Grabs 1 command off the comm channel and executes it.
+//
+pub fn check_comm_commands(rx: &Receiver<Box<CommCommand + Send>>,
+                       client_state: & mut HashMap<String,SocketReadAddress>) -> Result<Box<CommCommand>, TryRecvError> {
+    let received_value = rx.try_recv()?;
+    received_value.execute(client_state);
+    Ok(received_value)
+}
+
+//
+// Processes application level commands
+//
+pub fn check_app_commands(rx: &Receiver<Box<AppCommand + Send>>,)
+                          -> Result<Box<AppCommand>, TryRecvError> {
+    let received_value = rx.try_recv()?;
+    received_value.execute();
+    Ok(received_value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{thread, time};
     use network::{write_packet_to_buffer, send_packet_to_socket, read_packets};
+    use writer::PacketWriter;
     use std::sync::mpsc;
     use std::sync::mpsc::{Sender, Receiver};
     use std::collections::HashMap;
@@ -132,8 +183,9 @@ mod tests {
     fn it_works_for_real() {
 
         let (tx,command_rx): (Sender<Box<CommCommand + Send>>, Receiver<Box<CommCommand + Send>>) = mpsc::channel();
+        let (app_tx,_app_command_rx): (Sender<Box<AppCommand + Send>>, Receiver<Box<AppCommand + Send>>) = mpsc::channel();
 
-        let pri = PacketReaderServer {command_tx: tx};
+        let pri = PacketReaderServer {app_tx: app_tx, command_tx: tx};
 
         let listen_address =SocketReadAddress{
             read_host: String::from("127.0.0.1"),
@@ -146,6 +198,39 @@ mod tests {
         thread::sleep(ten_millis);
         let mut writebuf : [u8;2048] = [0;2048];
         // Works.
+
+        let packet_writer = PacketWriter::with_destination(
+            "127.0.0.1",
+            "34527",
+            "cname",
+            "pass",
+            "127.0.0.1",
+            "34256");
+
+        packet_writer.send_connection_request();
+        /*
+             cr.set_client_read_host("testhost22");
+        cr.set_client_read_port("1234");
+        cr.set_client_name("cname");
+        cr.set_client_pass("cpass");
+    }
+    let mut bufslice = & mut buf[..];
+
+    serialize_packed::write_message( & mut bufslice, & mut message)
+}
+
+pub fn send_packet_to_socket(buf : &  mut [u8;2048]) {
+    let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
+    socket.connect("127.0.0.1:34256").expect("connect function failed");
+    let mut bufslice = & mut buf[..];*/
+
+
+
+
+
+
+
+
         let _ = write_packet_to_buffer(& mut writebuf);
         let _ = send_packet_to_socket(& mut writebuf);
 

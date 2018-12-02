@@ -1,5 +1,6 @@
 extern crate capnp;
 pub mod reader;
+pub mod writer;
 pub mod network;
 pub mod connstate;
 

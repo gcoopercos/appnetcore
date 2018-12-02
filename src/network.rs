@@ -28,9 +28,6 @@ pub fn read_packets<T: PacketReader + Send + 'static>( packet_reader: T,
     addr_str.push_str(&listen_port._read_port.to_string());
 
     let rthread = thread::spawn( move|| {
-//        let mut addr_str : String = listen_port.read_host.to_string(); //;;"127.0.0.1:".to_string();
-//        addr_str.push_str(":");
-//        addr_str.push_str(&listen_port._read_port.to_string());
         let socket = UdpSocket::bind(addr_str).expect("couldn't bind to address");
         let mut buf:[u8;2048] = [0; 2048];
         loop {
@@ -42,10 +39,9 @@ pub fn read_packets<T: PacketReader + Send + 'static>( packet_reader: T,
             } else {
                 let res = packet_reader.read_command_packet(&buf);
                 match res {
-                    Ok(_val) =>  println!("amount was {}", number_of_bytes),
+                    Ok(_val) =>  {}, //println!("amount was {}", number_of_bytes),
                     Err(e) => println!("Problem {:?}  bytes: {}", e, number_of_bytes),
                 }
-                break;
             }
         }
     });
@@ -70,9 +66,9 @@ pub fn write_packet_to_buffer(buf : &  mut [u8;2048]) -> io::Result<()> {
     serialize_packed::write_message( & mut bufslice, & mut message)
 }
 
-pub fn send_packet_to_socket(buf : &  mut [u8;2048]) {
-    let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
-    socket.connect("127.0.0.1:34256").expect("connect function failed");
-    let mut bufslice = & mut buf[..];
-    socket.send(&mut bufslice).expect("couldn't send packet");
-}
+//pub fn send_packet_to_socket(buf : &  mut [u8;2048]) {
+//    let socket = UdpSocket::bind("127.0.0.1:34257").expect("couldn't bind to address");
+//    socket.connect("127.0.0.1:34256").expect("connect function failed");
+//    let mut bufslice = & mut buf[..];
+//    socket.send(&mut bufslice).expect("couldn't send packet");
+//}

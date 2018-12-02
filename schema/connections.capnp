@@ -3,7 +3,8 @@
 struct AppPacket {
   packetType: union {
      connectionRequest @0 :ConnectionRequest;
-     helloMessage @1: HelloMessage;
+     connectionResponse @1 :ConnectionResponse;
+     textMessage @2 :TextMessage;
   }
 }
 
@@ -14,8 +15,13 @@ struct ConnectionRequest {
     clientPass @3 :Text;
 }
 
-struct HelloMessage {
-    message @0 :Text;
+struct ConnectionResponse {
+    assignedId @0 :UInt32;
+}
+
+struct TextMessage {
+    receiverId @0 :UInt32;
+    message @1 :Text;
 }
 
 
