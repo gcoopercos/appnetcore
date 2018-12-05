@@ -93,7 +93,7 @@ impl PacketWriter {
     }
 
     pub fn send_packet_to_socket(&self, 
-                             dest_host: &str, dest_port: &str,
+                             _dest_host: &str, _dest_port: &str,
                              buf : &   [u8;2048]) {
         let  bufslice = &  buf[..];
         self.socket.send(& bufslice).expect("couldn't send packet");

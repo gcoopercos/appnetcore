@@ -9,9 +9,13 @@ use std::io;
 use ::connections_capnp::app_packet;
 
 use ::connstate::SocketReadAddress;
+use std::time::Duration;
 
 pub trait PacketReader {
-    fn read_command_packet(&self, buf : & [u8;2048]) -> ::capnp::Result<()>;
+    fn is_active(&self) -> bool;
+    fn read_command_packet(& mut self, buf : & [u8;2048]) -> ::capnp::Result<()>;
+    fn stop(& mut self);
+    fn check_thread_messages(&mut self);
 }
 
 ///
@@ -21,27 +25,40 @@ pub trait PacketReader {
 /// There is no way around this in safe Rust. If you want to pass data to other threads using spawn,
 /// it must be 'static, period
 ///
-pub fn read_packets<T: PacketReader + Send + 'static>( packet_reader: T,
-                                                       listen_port : &SocketReadAddress) -> thread::JoinHandle<()> {
+pub fn read_packets<T:PacketReader + Send + 'static>( mut packet_reader: T,
+                                                      listen_port : &SocketReadAddress) -> thread::JoinHandle<()> {
     let mut addr_str : String = listen_port.read_host.to_string();
     addr_str.push_str(":");
     addr_str.push_str(&listen_port._read_port.to_string());
 
     let rthread = thread::spawn( move|| {
         let socket = UdpSocket::bind(addr_str).expect("couldn't bind to address");
+        socket.set_read_timeout(Some(Duration::new(1, 0)));
         let mut buf:[u8;2048] = [0; 2048];
         loop {
-            let (number_of_bytes, _src_addr) = socket.recv_from(&mut buf)
-                .expect("Didn't receive data");
-            if number_of_bytes < 4 {
-                println!("recv_from expected >=4 but amount was {}", number_of_bytes);
-                break;
-            } else {
-                let res = packet_reader.read_command_packet(&buf);
-                match res {
-                    Ok(_val) =>  {}, //println!("amount was {}", number_of_bytes),
-                    Err(e) => println!("Problem {:?}  bytes: {}", e, number_of_bytes),
+            eprintln!("Waiting for packet");
+            let result = socket.recv_from(&mut buf);
+            if result.is_ok() {
+                let (number_of_bytes, _src_addr) = result.unwrap();
+                //.expect("Didn't receive data");
+                eprintln!("Packet received");
+                if number_of_bytes < 4 {
+                    println!("recv_from expected >=4 but amount was {}", number_of_bytes);
+                    break;
+                } else {
+                    let res = packet_reader.read_command_packet(&buf);
+                    match res {
+                        Ok(_val) => {}, //println!("amount was {}", number_of_bytes),
+                        Err(e) => println!("Problem {:?}  bytes: {}", e, number_of_bytes),
+                    }
                 }
+            }
+            eprint!("^");
+            packet_reader.check_thread_messages();
+            // Check to see if we're still reading packets
+            if packet_reader.is_active() == false {
+                eprintln!("Packet reader stopped.");
+                break;
             }
         }
     });
