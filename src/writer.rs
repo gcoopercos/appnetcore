@@ -20,6 +20,7 @@ impl PacketWriter {
     pub fn with_destination(
         client_read_host: &str,
         client_read_port: &str,
+        client_write_port: &str,
         client_name: &str,
         client_pass: &str,
         dest_host: &str,
@@ -30,7 +31,7 @@ impl PacketWriter {
         //let bindsocket = UdpSocket::bind(client_read_host.to_string() + ":" +
         //   &client_read_port.to_string()).expect("couldn't bind to address");
         let bindsocket = UdpSocket::bind(client_read_host.to_string() +
-            ":" + client_read_port).expect("couldn't bind to address");
+            ":" + client_write_port).expect("couldn't bind to address");
 
         bindsocket.connect(dest_host.to_string() + ":" + &dest_port.to_string()).
             expect("connect function failed");

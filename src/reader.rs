@@ -264,6 +264,7 @@ mod tests {
         let packet_writer = PacketWriter::with_destination(
             "127.0.0.1",
             "34527",
+            "34528",
             "cname",
             "pass",
             "127.0.0.1",
@@ -325,6 +326,7 @@ mod tests {
         let packet_writer = PacketWriter::with_destination(
             "127.0.0.1",
             "34529",
+            "34530",
             "cname",
             "pass",
             "127.0.0.1",
@@ -336,6 +338,7 @@ mod tests {
         let packet_writer_2 = PacketWriter::with_destination(
             "127.0.0.1",
             "34533",
+            "34534",
             "cname2",
             "pass2",
             "127.0.0.1",

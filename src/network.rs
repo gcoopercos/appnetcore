@@ -36,12 +36,12 @@ pub fn read_packets<T:PacketReader + Send + 'static>( mut packet_reader: T,
         socket.set_read_timeout(Some(Duration::new(1, 0)));
         let mut buf:[u8;2048] = [0; 2048];
         loop {
-            eprintln!("Waiting for packet");
+            // Waits for packets for timeout specified in set_read_timeout
             let result = socket.recv_from(&mut buf);
             if result.is_ok() {
                 let (number_of_bytes, _src_addr) = result.unwrap();
                 //.expect("Didn't receive data");
-                eprintln!("Packet received");
+
                 if number_of_bytes < 4 {
                     println!("recv_from expected >=4 but amount was {}", number_of_bytes);
                     break;
@@ -53,7 +53,6 @@ pub fn read_packets<T:PacketReader + Send + 'static>( mut packet_reader: T,
                     }
                 }
             }
-            eprint!("^");
             packet_reader.check_thread_messages();
             // Check to see if we're still reading packets
             if packet_reader.is_active() == false {
