@@ -29,8 +29,8 @@ impl PacketWriter {
         //   &my_port.to_string()).expect("couldn't bind to address");
         //let bindsocket = UdpSocket::bind(client_read_host.to_string() + ":" +
         //   &client_read_port.to_string()).expect("couldn't bind to address");
-        let bindsocket = UdpSocket::bind(client_read_host.to_string() + ":14444"
-           ).expect("couldn't bind to address");
+        let bindsocket = UdpSocket::bind(client_read_host.to_string() +
+            ":" + client_read_port).expect("couldn't bind to address");
 
         bindsocket.connect(dest_host.to_string() + ":" + &dest_port.to_string()).
             expect("connect function failed");
@@ -70,7 +70,7 @@ impl PacketWriter {
         self.send_packet_to_socket(&self.dest_host, &self.dest_port, &writebuf);
     }
 
-    pub fn send_text_message(&self, receiver_id: u32, text_message: &str) {
+    pub fn send_text_message(&self, receiver_id: &str, text_message: &str) {
         let mut writebuf: [u8; 2048] = [0; 2048];
         // Works.
 

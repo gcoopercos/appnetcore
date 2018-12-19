@@ -20,7 +20,7 @@ struct ConnectionResponse {
 }
 
 struct TextMessage {
-    receiverId @0 :UInt32;
+    receiverId @0 :Text;
     message @1 :Text;
 }
 

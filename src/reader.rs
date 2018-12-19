@@ -25,22 +25,22 @@ pub trait ReaderCommand {
 
 struct AddClientCommand {
     read_host : String,
-    read_port : String
+    read_port : String,
+    reader_id : String
 }
 
 impl CommCommand for AddClientCommand {
     fn execute(&self, clients: & mut ClientRegistryKeeper) {
-        eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_host);
-        eprintln!("!!!!!!!!!!!!!!!! READ HOST: {:?}", self.read_port);
         let client_handle : SocketReadAddress =  SocketReadAddress {
             read_host: self.read_host.to_string(),
-            _read_port: self.read_port.parse::<u32>().unwrap()};
+            read_port: self.read_port.parse::<u32>().unwrap(),
+            reader_id: self.reader_id.to_string()};
         clients.add_client(client_handle);
     }
 }
 
 struct TextMessageCommand {
-    receiver_id: u32,
+    receiver_id: String,
     message : String
 }
 
@@ -79,6 +79,15 @@ impl PacketReaderServer {
             reader_rx: reader_receiver
         }
     }
+
+    // TEMPORARY HASH FUNCTION TO PROVIDE READER ID
+    pub fn hashed_id(name: &str, pass: &str) -> String {
+        let mut h_id = String::from(name);
+        h_id.push_str(pass);
+        h_id
+    }
+
+
 }
 
 impl PacketReader for PacketReaderServer {
@@ -118,7 +127,9 @@ impl PacketReader for PacketReaderServer {
                 let cmd =
                     Box::new(AddClientCommand {
                         read_host: String::from(request.get_client_read_host()?),
-                        read_port: String::from(request.get_client_read_port()?)
+                        read_port: String::from(request.get_client_read_port()?),
+                        reader_id: String::from(PacketReaderServer::hashed_id(request.get_client_name()?,
+                                                  request.get_client_pass()?))
                     });
 
                 self.command_tx.send(cmd).unwrap();
@@ -130,7 +141,7 @@ impl PacketReader for PacketReaderServer {
                 let text_message = msg?;
                 let cmd =
                     Box::new(TextMessageCommand {
-                        receiver_id: text_message.get_receiver_id(),
+                        receiver_id: String::from(text_message.get_receiver_id()?),
                         message: String::from(text_message.get_message()?)
                     });
 
@@ -176,6 +187,13 @@ pub fn check_app_commands(rx: &Receiver<Box<AppCommand + Send>>,)
     Ok(received_value)
 }
 
+fn stop_reader(reader_tx : Sender<Box<ReaderCommand + Send>>) {
+    let cmd =
+        Box::new(StopReaderCommand {});
+
+    reader_tx.send(cmd).unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,31 +233,29 @@ mod tests {
 
 
     #[test]
-    fn it_works_for_real() {
-
-        eprintln!("itworksforreal");
-
-//        let (tx,command_rx): (Sender<Box<CommCommand + Send>>, Receiver<Box<CommCommand + Send>>) = mpsc::channel();
+    fn basic_connection_test() {
+        // For the reader to send communication commands
         let (tx,command_rx) = mpsc::channel();
-//        let (app_tx,_app_command_rx): (Sender<Box<AppCommand + Send>>, Receiver<Box<AppCommand + Send>>) = mpsc::channel();
+
+        // For the reader to send application commands
         let (app_tx,_app_command_rx) = mpsc::channel();
 
+        // For the reader to receive commands controlling the reader
         let (reader_tx, reader_rx) = mpsc::channel();
 
         //let pri = PacketReaderServer {app_tx: app_tx, command_tx: tx};
-        let mut pri = PacketReaderServer::new(
+        let pri = PacketReaderServer::new(
             tx,
             app_tx,
         reader_rx);
 
-        let listen_address =SocketReadAddress{
+        let listen_address = SocketReadAddress{
             read_host: String::from("127.0.0.1"),
-            _read_port: 34256
+            read_port: 34256,
+            reader_id: String::from("")
         };
 
-        eprintln!("Setting up packet reader");
-        let rthread = read_packets(pri, &listen_address);
-
+        let reader_thread = read_packets(pri, &listen_address);
         let ten_millis  = time::Duration::from_millis(200);
 
         thread::sleep(ten_millis);
@@ -260,11 +276,92 @@ mod tests {
         let mut client_map = HashMap::new();
         received.execute(& mut client_map);
 
+        let client_address = SocketReadAddress{
+            read_host: String::from("127.0.0.1"),
+            read_port: 34527,
+            reader_id: String::from("cnamepass")
+        };
+
+        assert_eq!(client_map.len(),1);
+        assert_eq!(client_map.get("127.0.0.1:34527").unwrap(), &client_address);
         stop_reader(reader_tx);
-        eprintln!("Test over");
-        let _ = rthread.join();
-        println!("hubba hubba");
-        eprintln!("Ehubba hubba");
+        let _ = reader_thread.join();
+    }
+
+
+    // Tests two connections from a single host to a server
+    #[test]
+    fn two_connection_test() {
+        // For the reader to send communication commands
+        let (tx,command_rx) = mpsc::channel();
+
+        // For the reader to send application commands
+        let (app_tx,_app_command_rx) = mpsc::channel();
+
+        // For the reader to receive commands controlling the reader
+        let (reader_tx, reader_rx) = mpsc::channel();
+
+        //let pri = PacketReaderServer {app_tx: app_tx, command_tx: tx};
+        let pri = PacketReaderServer::new(
+            tx,
+            app_tx,
+            reader_rx);
+
+        let listen_address = SocketReadAddress{
+            read_host: String::from("127.0.0.1"),
+            read_port: 34255,
+            reader_id: String::from("")
+        };
+
+        eprintln!("Setting up packet reader");
+        let reader_thread = read_packets(pri, &listen_address);
+
+        let ten_millis  = time::Duration::from_millis(200);
+
+        thread::sleep(ten_millis);
+        // Works.
+        let mut client_map = HashMap::new();
+
+        let packet_writer = PacketWriter::with_destination(
+            "127.0.0.1",
+            "34529",
+            "cname",
+            "pass",
+            "127.0.0.1",
+            "34255");
+        packet_writer.send_connection_request();
+        let received = command_rx.recv().unwrap();
+        received.execute(& mut client_map);
+
+        let packet_writer_2 = PacketWriter::with_destination(
+            "127.0.0.1",
+            "34533",
+            "cname2",
+            "pass2",
+            "127.0.0.1",
+            "34255");
+        packet_writer_2.send_connection_request();
+        let received2 = command_rx.recv().unwrap();
+        received2.execute(& mut client_map);
+
+
+
+        let client_address = SocketReadAddress{
+            read_host: String::from("127.0.0.1"),
+            read_port: 34529,
+            reader_id: String::from("cnamepass")
+        };
+        let client_address2 = SocketReadAddress{
+            read_host: String::from("127.0.0.1"),
+            read_port: 34533,
+            reader_id: String::from("cname2pass2")
+        };
+
+        assert_eq!(client_map.len(),2);
+        assert_eq!(client_map.get("127.0.0.1:34529").unwrap(), &client_address);
+        assert_eq!(client_map.get("127.0.0.1:34533").unwrap(), &client_address2);
+        stop_reader(reader_tx);
+        let _ = reader_thread.join();
     }
 
 
@@ -293,12 +390,6 @@ mod tests {
     }
 
 
-    fn stop_reader(reader_tx : Sender<Box<ReaderCommand + Send>>) {
-        let cmd =
-            Box::new(StopReaderCommand {});
-
-        reader_tx.send(cmd).unwrap();
-    }
 }
 
 

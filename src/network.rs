@@ -29,7 +29,7 @@ pub fn read_packets<T:PacketReader + Send + 'static>( mut packet_reader: T,
                                                       listen_port : &SocketReadAddress) -> thread::JoinHandle<()> {
     let mut addr_str : String = listen_port.read_host.to_string();
     addr_str.push_str(":");
-    addr_str.push_str(&listen_port._read_port.to_string());
+    addr_str.push_str(&listen_port.read_port.to_string());
 
     let rthread = thread::spawn( move|| {
         let socket = UdpSocket::bind(addr_str).expect("couldn't bind to address");
